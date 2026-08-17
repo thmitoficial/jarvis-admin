@@ -15,7 +15,6 @@ const SCOPES = [
   'https://www.googleapis.com/auth/gmail.send'
 ].join(' ');
 
-// Cache em memória do access token
 let cachedToken = null;
 let cachedExpiry = 0;
 
@@ -29,7 +28,6 @@ function creds() {
   return { clientId, clientSecret, redirectUri };
 }
 
-// URL para o usuário autorizar
 export function getAuthUrl() {
   const { clientId, redirectUri } = creds();
   const params = new URLSearchParams({
@@ -44,23 +42,18 @@ export function getAuthUrl() {
   return `${AUTH_URL}?${params.toString()}`;
 }
 
-// Troca o código de autorização por tokens
 export async function exchangeCode(code) {
   const { clientId, clientSecret, redirectUri } = creds();
   const r = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      code,
-      client_id: clientId,
-      client_secret: clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code'
+      code, client_id: clientId, client_secret: clientSecret,
+      redirect_uri: redirectUri, grant_type: 'authorization_code'
     })
   });
   const j = await r.json();
   if (j.error) throw new Error(`OAuth token exchange: ${j.error} - ${j.error_description || ''}`);
-  // Persiste refresh token
   if (j.refresh_token) {
     process.env.GOOGLE_REFRESH_TOKEN = j.refresh_token;
     console.log('✓ Refresh token obtido e armazenado em memória.');
@@ -72,7 +65,6 @@ export async function exchangeCode(code) {
   return j;
 }
 
-// Renova access token usando o refresh token
 async function refreshAccessToken() {
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   if (!refreshToken) {
@@ -83,10 +75,8 @@ async function refreshAccessToken() {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token'
+      refresh_token: refreshToken, client_id: clientId,
+      client_secret: clientSecret, grant_type: 'refresh_token'
     })
   });
   const j = await r.json();
@@ -101,13 +91,11 @@ async function refreshAccessToken() {
   return j.access_token;
 }
 
-// Retorna access token válido, renovando se necessário
 export async function getAccessToken() {
   if (cachedToken && Date.now() < cachedExpiry) return cachedToken;
   return refreshAccessToken();
 }
 
-// Chama a API do Google com token válido
 export async function googleFetch(url, opts = {}) {
   const token = await getAccessToken();
   const r = await fetch(url, {
@@ -115,7 +103,6 @@ export async function googleFetch(url, opts = {}) {
     headers: { 'Authorization': `Bearer ${token}`, ...(opts.headers || {}) }
   });
   if (r.status === 401) {
-    // Token pode ter expirado entre o cache e a chamada; força renovação
     cachedExpiry = 0;
     return googleFetch(url, opts);
   }

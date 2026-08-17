@@ -1,16 +1,1 @@
-{
-  "name": "google-worker",
-  "version": "1.0.0",
-  "description": "Worker Google OAuth — segura refresh token e expõe /agenda e /email/listar para a API jarvis-admin.",
-  "type": "module",
-  "main": "src/server.js",
-  "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
-  },
-  "engines": { "node": ">=18" },
-  "dependencies": {
-    "express": "^4.19.2",
-    "dotenv": "^16.4.5"
-  }
-}
+{"name":"google-worker","version":"1.0.0","description":"Worker Google OAuth — segura refresh token e expõe /agenda e /email/listar para a API jarvis-admin.","type":"module","main":"src/server.js","scripts":{"start":"node src/server.js","dev":"node --watch src/server.js"},"engines":{"node":">=18"},"dependencies":{"express":"^4.19.2","dotenv":"^16.4.5"}}
