@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0e27">
+<title>Jarvis Voice</title>
+<link rel="manifest" href="manifest.json">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0a0e27;--surface:#141937;--surface2:#1d2447;--border:#2a3158;--text:#e6e9f5;--muted:#8b92b8;--accent:#5b8def;--accent2:#9d6bff;--ok:#22c55e;--warn:#f59e0b;--err:#ef4444}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px;font-weight:600}
+header .config-btn{background:var(--surface2);color:var(--muted);border:1px solid var(--border);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px}
+.app{display:flex;flex:1;min-height:0}
+.sidebar{width:220px;background:var(--surface);border-right:1px solid var(--border);padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-size:14px;transition:all .15s}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--surface2);color:var(--accent);font-weight:500}
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.content{flex:1;overflow-y:auto;padding:20px 24px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:12px}
+.btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 16px;cursor:pointer;font-size:14px}
+.input{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;width:100%}
+.empty{text-align:center;color:var(--muted);padding:60px 20px}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+footer{background:var(--surface);border-top:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:14px}
+.mic-btn{width:54px;height:54px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;font-size:22px;color:#fff}
+.mic-btn.listening{background:var(--err);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.5)}50%{box-shadow:0 0 0 12px rgba(239,68,68,0)}}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 18px;font-size:13px;z-index:200;opacity:0;transition:opacity .3s}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header><h1>Jarvis Voice</h1></header>
+<div class="app">
+  <nav class="sidebar">
+    <div class="nav-item" data-view="inbox">E-mail</div>
+    <div class="nav-item" data-view="agenda">Agenda</div>
+    <div class="nav-item" data-view="composer">Escrever</div>
+    <div class="nav-item" data-view="sources">Fontes</div>
+  </nav>
+  <main class="main"><div class="content" id="content"><div class="empty">Toque no microfone</div></div></main>
+</div>
+<footer>
+  <button class="mic-btn" id="micBtn">🎤</button>
+  <div class="transcript" id="transcript"></div>
+  <div class="status" id="status">Toque para falar</div>
+</footer>
+<div class="toast" id="toast"></div>
+<script>
+const state={apiUrl:localStorage.getItem('jarvis_api_url')||'http://localhost:3000',listening:false,continuous:false,recognition:null,view:'inbox'};
+async function api(path,opts={}){const url=state.apiUrl.replace(/\/$/,'')+path;const r=await fetch(url,{...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});const j=await r.json().catch(()=>({ok:false,erro:'erro'}));if(!r.ok||!j.ok)throw new Error(j.erro||'HTTP '+r.status);return j.dados}
+function $(id){return document.getElementById(id)}
+function toast(m,t=''){const e=$('toast');e.textContent=m;e.className='toast show '+t;setTimeout(()=>e.className='toast',3000)}
+function escapeHtml(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function formatDate(iso){if(!iso)return'';try{return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}catch{return iso}}
+async function render(){const c=$('content');c.innerHTML='<div class="empty">Carregando...</div>';try{if(state.view==='inbox')await renderInbox(c);else if(state.view==='agenda')await renderAgenda(c);else if(state.view==='composer')renderComposer(c);else if(state.view==='sources')await renderSources(c)}catch(e){c.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>'}}
+async function renderInbox(c){c.innerHTML='<h2>Caixa de entrada</h2><div id="inboxList"></div>';const list=$('inboxList');list.innerHTML='<div class="empty">Carregando...</div>';try{const arr=await api('/admin/email/listar?max=10');if(!arr.length){list.innerHTML='<div class="empty">Sem e-mails</div>';return}list.innerHTML=arr.map(t=>'<div class="card" onclick="openThread(\''+t.id+'\')"><div>'+(t.unread?'NOVO ':'')+escapeHtml(t.subject||'(sem assunto)')+'</div><div>'+escapeHtml(t.from||'')+'</div><div>'+escapeHtml(t.snippet||'')+'</div><div>'+formatDate(t.date)+'</div></div>').join('')}catch(e){list.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>'}}
+async function openThread(id){const c=$('content');c.innerHTML='<h2>E-mail</h2><div class="empty">Carregando...</div>';try{const msgs=await api('/admin/email/'+id);c.innerHTML='<h2>E-mail</h2>';for(const m of msgs){const d=document.createElement('div');d.className='card';d.innerHTML='<div>De: '+escapeHtml(m.from||'')+'</div><div>'+formatDate(m.date)+'</div><div>'+escapeHtml(m.body||m.snippet||'')+'</div>';c.appendChild(d)}}catch(e){c.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>'}}
+async function renderAgenda(c){c.innerHTML='<h2>Agenda</h2><div id="agendaList"></div>';try{const de=new Date().toISOString();const ate=new Date(Date.now()+7*86400000).toISOString();const evs=await api('/admin/agenda?de='+encodeURIComponent(de)+'&ate='+encodeURIComponent(ate));const arr=Array.isArray(evs)?evs:(evs.items||[]);$('agendaList').innerHTML=arr.length?arr.map(e=>'<div class="card"><div>'+formatDate(e.start?.dateTime||e.start?.date)+'</div><div>'+escapeHtml(e.summary||'')+'</div></div>').join(''):'<div class="empty">Sem eventos</div>'}catch(e){$('agendaList').innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>'}}
+function renderComposer(c){c.innerHTML='<h2>Escrever e-mail</h2><div class="card"><input class="input" id="emailTo" placeholder="Para:"><input class="input" id="emailSubject" placeholder="Assunto:"><textarea class="input" id="emailBody" placeholder="Mensagem" rows="5"></textarea><button class="btn" onclick="sendEmail()">Enviar</button></div><div id="emailResult"></div>'}
+async function sendEmail(){const to=$('emailTo').value.trim(),subject=$('emailSubject').value.trim(),text=$('emailBody').value.trim();if(!to||!subject){toast('Preencha destinatario e assunto','error');return}$('emailResult').innerHTML='Enviando...';try{await api('/admin/email/enviar',{method:'POST',body:JSON.stringify({to,subject,text})});toast('Enviado','success');$('emailResult').innerHTML='<div class="empty">Enviado!</div>'}catch(e){toast(e.message,'error')}}
+async function renderSources(c){c.innerHTML='<h2>Fontes</h2><div id="srcList"></div>';const checks=[['CNPJ','/admin/empresa/11222333000181'],['CEP','/admin/cep/01001000'],['Cotacao','/admin/cotacao/USD'],['Estados','/admin/estados']];let html='';for(const[n,p]of checks){try{await api(p);html+='<div>'+n+': OK</div>'}catch{html+='<div>'+n+': ERRO</div>'}}$('srcList').innerHTML=html}
+function initVoice(){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast('Voz nao suportada','error');return}state.recognition=new SR();state.recognition.lang='pt-BR';state.recognition.interimResults=true;state.recognition.onresult=e=>{let txt='';for(let i=e.resultIndex;i<e.results.length;i++)txt+=e.results[i][0].transcript;$('transcript').textContent=txt;if(e.results[e.results.length-1].isFinal)handleCommand(txt.trim())};state.recognition.onend=()=>{state.listening=false;$('micBtn').classList.remove('listening');if(state.continuous)setTimeout(()=>{if(state.continuous)startListening()},300)}}
+function toggleMic(){state.listening?stopListening():startListening()}
+function startListening(){try{state.recognition.start();state.listening=true;$('micBtn').classList.add('listening')}catch{}}
+function stopListening(){try{state.recognition.stop()}catch{}state.listening=false}
+async function handleCommand(text){if(!text)return;const t=text.toLowerCase();try{if(/email|caixa|inbox/.test(t)){state.view='inbox';render()}else if(/agenda|evento/.test(t)){state.view='agenda';render()}else if(/escrever|enviar.*email/.test(t)){state.view='composer';render()}else if(/fonte|status/.test(t)){state.view='sources';render()}else{const d=await api('/admin/chat',{method:'POST',body:JSON.stringify({texto:text})});toast('Resultado: '+d.intencao,'')}}catch(e){toast(e.message,'error')}}
+document.querySelectorAll('.nav-item').forEach(n=>n.addEventListener('click',()=>{state.view=n.dataset.view;document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));n.classList.add('active');render()}));
+initVoice();
+</script>
+</body>
+</html>
