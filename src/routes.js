@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as src from './services/sources.js';
-import { enviarEmail } from './services/email.js';
+import { enviarEmail, listarEmails, lerThread } from './services/email.js';
 import { listarEventos, criarEvento } from './services/agenda.js';
 import { despachar } from './dispatcher.js';
 
@@ -17,20 +17,43 @@ function wrap(fn) {
   };
 }
 
+// ----- Empresa / CNPJ -----
 router.get('/admin/empresa/:cnpj', wrap(r => src.cnpj(r.params.cnpj)));
+
+// ----- CEP -----
 router.get('/admin/cep/:cep', wrap(r => src.cep(r.params.cep)));
+
+// ----- Cotações / Taxas -----
 router.get('/admin/cotacao/:moeda', wrap(r => src.cotacao(r.params.moeda, r.query.data)));
 router.get('/admin/taxas', wrap(_ => src.taxas()));
+
+// ----- IBGE -----
 router.get('/admin/estados', wrap(_ => src.estados()));
 router.get('/admin/estados/:uf/municipios', wrap(r => src.municipios(r.params.uf)));
 router.get('/admin/estados/:uf/populacao', wrap(r => src.populacao(r.params.uf)));
+
+// ----- Feriados -----
 router.get('/admin/feriados/:ano', wrap(r => src.feriados(r.params.ano)));
+
+// ----- Bancos -----
 router.get('/admin/bancos', wrap(_ => src.bancos()));
+
+// ----- NF-e -----
 router.get('/admin/nfe/:chave', wrap(r => src.nfe(r.params.chave)));
+
+// ----- GPS / Geo -----
 router.get('/admin/geo/reverse', wrap(r => src.reverseGeocode(r.query.lat, r.query.lon)));
 router.get('/admin/geo/rota', wrap(r => src.rota(r.query.origLat, r.query.origLon, r.query.destLat, r.query.destLon)));
 router.get('/admin/geo/ip', wrap(r => src.ipGeo(r.query.ip)));
+
+// ----- E-mail -----
 router.post('/admin/email/enviar', wrap(r => enviarEmail(r.body)));
+router.get('/admin/email/listar', wrap(r => listarEmails(r.query.q || '', Number(r.query.max) || 10)));
+router.get('/admin/email/:threadId', wrap(r => lerThread(r.params.threadId)));
+
+// ----- Agenda -----
 router.get('/admin/agenda', wrap(r => listarEventos({ de: r.query.de, ate: r.query.ate })));
 router.post('/admin/agenda', wrap(r => criarEvento(r.body)));
+
+// ----- Chat NL -----
 router.post('/admin/chat', wrap(r => despachar(r.body.texto)));
